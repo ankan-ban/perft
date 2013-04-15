@@ -173,6 +173,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\MoveGenerator088.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\MoveGeneratorLUT.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\perft.cpp"
 				>
 			</File>

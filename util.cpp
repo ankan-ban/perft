@@ -36,7 +36,7 @@ uint8 Utils::getPieceCode(char piece)
 	case 'K':
 		return COLOR_PIECE(WHITE, KING);
 	default:
-		return 0;
+		return EMPTY_SQUARE;
 
 	}
 }
@@ -46,14 +46,15 @@ char Utils::getPieceChar(uint8 code)
 {
     uint8 color = COLOR(code);
     uint8 piece = PIECE(code);
-    
-    if (code)
+    char pieceChar = '.';
+
+    if (code != EMPTY_SQUARE)
     {
         assert((color == WHITE) || (color == BLACK));
         assert((piece >= PAWN)  && (piece <= KING));
+		pieceChar = pieceCharMapping[piece];
     }
 
-    char pieceChar = pieceCharMapping[piece];
     if (color == BLACK)
     {
         pieceChar += ('p' - 'P');
@@ -183,6 +184,12 @@ void Utils::dispBoard(BoardPosition *pos)
         printf("Black Queen Side castle\n");
 }
 
+void Utils::clearBoard(BoardPosition *pos)
+{
+	for(int i=0;i<8;i++)
+		for (int j=0;j<8;j++)
+			pos->board[INDEX088(i, j)] = EMPTY_SQUARE;
+}
 
 // displays a move object
 void Utils::displayMove(Move move) 

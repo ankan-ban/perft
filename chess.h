@@ -10,6 +10,9 @@ typedef unsigned short     uint16;
 typedef unsigned int       uint32;
 typedef unsigned long long uint64;
 
+#define CT_ASSERT(expr) \
+int __static_assert(int static_assert_failed[(expr)?1:-1])
+
 #define BIT(i)   (1 << (i))
 
 // Terminology:
@@ -30,11 +33,56 @@ typedef unsigned long long uint64;
 #define WHITE   0
 #define BLACK   1
 
+
+#define SLIDING_PIECE_INDEX(piece) ((piece) - BISHOP)
+// BISHOP 0
+// ROOK   1
+// QUEEN  3
+
+
 // bits 012 - piece
 // bit    4 - color
-#define COLOR_PIECE(color, piece)   ((color << 4) | (piece))
-#define COLOR(colorpiece)           (colorpiece >> 4)
-#define PIECE(colorpiece)           (colorpiece & 7)
+/*
+#define COLOR_PIECE(color, piece)			((color << 4) | (piece))
+#define COLOR(colorpiece)					((colorpiece) >> 4)
+#define PIECE(colorpiece)					((colorpiece) & 7)
+#define EMPTY_SQUARE						0
+#define ISEMPTY(colorpiece)					((colorpiece) == EMPTY_SQUARE)
+#define IS_OF_COLOR(colorpiece, color)		(colorpiece && (COLOR(colorpiece) == color))
+#define IS_ENEMY_COLOR(colorpiece, color)	(colorpiece && (COLOR(colorpiece) != color))
+*/
+
+// new encoding for fast table based move generation
+// bits 01234 : color
+// bits   567 : piece
+
+/* From http://chessprogramming.wikispaces.com/Table-driven+Move+Generation
+ five least significant piece code bits from board: 
+   01000 empty
+   10101 white piece (0x15)
+   10110 black piece (0x16)*/
+/*
+#define COLOR_PIECE(color, piece)      		((0x15 + color) | (piece << 5))
+#define COLOR(colorpiece)              		(((colorpiece & 2) >> 1))
+#define PIECE(colorpiece)              		((colorpiece) >> 5)
+#define EMPTY_SQUARE						0x8
+#define ISEMPTY(colorpiece)					((colorpiece) & EMPTY_SQUARE)
+#define IS_OF_COLOR(colorpiece, color)		((colorpiece) & (1 << (color)))
+#define IS_ENEMY_COLOR(colorpiece, color)	(IS_OF_COLOR(colorpiece, 1 - color))
+*/
+
+// another encoding (a bit faster and simpler than above)
+// bits  01 color	1 - white, 2 - black
+// bits 234 piece
+#define COLOR_PIECE(color, piece)      		((1+color) | (piece << 2))
+#define COLOR(colorpiece)              		(((colorpiece & 2) >> 1))
+#define PIECE(colorpiece)              		((colorpiece) >> 2)
+#define EMPTY_SQUARE						0x0
+#define ISEMPTY(colorpiece)					(!(colorpiece))
+#define IS_OF_COLOR(colorpiece, color)		((colorpiece) & (1 << (color)))
+#define IS_ENEMY_COLOR(colorpiece, color)	(IS_OF_COLOR(colorpiece, 1 - color))
+
+
 
 #define INDEX088(rank, file)        ((rank) << 4 | (file))
 #define RANK(index088)              (index088 >> 4)
@@ -85,6 +133,8 @@ struct BoardPosition
     };
 };
 
+CT_ASSERT(sizeof(BoardPosition) == 128);
+
 /*
        The board representation     Free space for other structures
 
@@ -109,12 +159,100 @@ struct Move
     uint8  capturedPiece;   // the piece captured (if any)
     uint8  flags;           // flags to indicate special moves, e.g castling, en passent, promotion, etc
 };
+CT_ASSERT(sizeof(Move) == 4);
+
+
+// Look up table used for fast (branchless) move generation
+// see http://chessprogramming.wikispaces.com/Table-driven+Move+Generation
+// 
+
+// structure of an item in move look up table
+struct MoveLUTItem
+{
+	uint32  tosq  : 8;
+	uint32  next0 : 12;
+	uint32  next1 : 12;
+};
+CT_ASSERT(sizeof(MoveLUTItem) == 4);
+
+
+// max no of moves possible for a given board position (this can be as large as 218 ?)
+// e.g, test this FEN string "3Q4/1Q4Q1/4Q3/2Q4R/Q4Q2/3Q4/1Q4Rp/1K1BBNNk w - - 0 1"
+#define MAX_MOVES 256
+
+// max no of moves possible by a single piece
+// actually it's 27 for a queen when it's in the center of the board
+#define MAX_SINGLE_PIECE_MOVES 32
 
 
 
+/** Declarations for class/methods in MoveGenerator088.cpp **/
+class MoveGenerator
+{
+	// let MoveGeneratorLUT make use of private functions of this class to generate non-sliding moves
+	friend class MoveGeneratorLUT;
 
+private:
+    static BoardPosition *pos;
+    static Move *moves;
+    static uint32 nMoves;
+    static uint32 chance;
 
+    __forceinline static void addMove(uint32 src, uint32 dst, uint8 oldPiece, uint8 flags);
+    __forceinline static void addPromotions(uint32 src, uint32 dst, uint8 oldPiece);
+    __forceinline static void generatePawnMoves(uint32 curPos);
+    __forceinline static void generateOffsetedMove(uint32 curPos, uint32 offset);
+    __forceinline static void generateOffsetedMoves(uint32 curPos, const uint32 jumpTable[], int n);
+    __forceinline static void generateKnightMoves(uint32 curPos);
+    __forceinline static void generateKingMoves(uint32 curPos);
+    __forceinline static void generateSlidingMoves(const uint32 curPos, const uint32 offset);
+    __forceinline static void generateRookMoves(uint32 curPos);
+    __forceinline static void generateBishopMoves(uint32 curPos);
+    __forceinline static void generateQueenMoves(uint32 curPos);
+    __forceinline static void generateMovesForSquare(uint32 index088, uint32 colorpiece);
 
+public:
+    // generates moves for the given board position
+    // returns the no of moves generated
+    static int generateMoves (BoardPosition *position, Move *generatedMoves);
+
+};
+
+/** Declarations for class/methods in MoveGeneratorLUT.cpp **/
+class MoveGeneratorLUT
+{
+private:
+	// for table based move generation of sliding pieces
+	static MoveLUTItem slidingMoveTable[1456+896+560];	 // for queen, rook and bishop
+	static uint32      slidingModeStart[3][64];			 // start indices from all board positions for all sliding pieces
+
+    static BoardPosition *pos;
+    static Move *moves;
+    static uint32 nMoves;
+    static uint32 chance;
+
+	// add move generated by 088 move generator to the look up table
+	static void addGeneratedMoves(uint32 &lutIndex, uint32 next1);
+
+	__forceinline static void generateSlidingMoves(uint32 piece, uint32 index88, uint32 index);
+
+	// non sliding move routines (TODO: convert them to sliding approach)
+    __forceinline static void addMove(uint32 src, uint32 dst, uint8 oldPiece, uint8 flags);
+    __forceinline static void addPromotions(uint32 src, uint32 dst, uint8 oldPiece);
+    __forceinline static void generatePawnMoves(uint32 curPos);
+    __forceinline static void generateOffsetedMove(uint32 curPos, uint32 offset);
+    __forceinline static void generateOffsetedMoves(uint32 curPos, const uint32 jumpTable[], int n);
+    __forceinline static void generateKnightMoves(uint32 curPos);
+    __forceinline static void generateKingMoves(uint32 curPos);
+
+public:
+	// initialize the look up tables used for table driven sliding move generation
+	static void init();
+
+    // generates moves for the given board position
+    // returns the no of moves generated
+    static int generateMoves (BoardPosition *position, Move *generatedMoves);
+};
 
 
 /** Declarations for class/methods in Util.cpp **/
@@ -177,5 +315,8 @@ public:
 
 	// reads a FEN string and sets board and other Game Data accorodingly
 	static void readFENString(char fen[], BoardPosition *pos);
+
+	// clears the board (i.e, makes all squares blank)
+	static void clearBoard(BoardPosition *pos);
 
 };

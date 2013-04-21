@@ -212,6 +212,7 @@ private:
     __forceinline static void generateQueenMoves(uint32 curPos);
     __forceinline static void generateMovesForSquare(uint32 index088, uint32 colorpiece);
 
+    __forceinline static bool MoveGenerator::isInvalidMove(uint32 src, uint32 dst, uint8 oldPiece, uint8 flags);
 	__forceinline static bool checkSlidingThreat(uint32 curPos, uint32 offset, uint32 piece1, uint32 piece2);
 	static bool isThreatened(const uint32 curPos, uint32 color);
 

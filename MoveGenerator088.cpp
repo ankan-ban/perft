@@ -5,12 +5,12 @@
 // 1. for castling it's not checked if the squares are in check (major issue. need to be fixed)
 // 2. it's not checked if a move puts the king in check (can probably avoid checking this)
 
-void MoveGenerator::addMove(uint32 src, uint32 dst, uint8 oldPiece, uint8 flags)
+bool MoveGenerator::isInvalidMove(uint32 src, uint32 dst, uint8 oldPiece, uint8 flags)
 {
-    // move puts king in check! illegal.
+    // a move is illegal if it puts king in check! (or doesn't take the king out of check)
     if (ISVALIDPOS(kingPos))
     {
-        // remove the pieces from source/dst positions to check if it puts the king in check
+        // remove the pieces from source/dst positions to correctly check
         uint8 temp = pos->board[src];
         pos->board[dst] = temp;
         pos->board[src] = 0;
@@ -35,8 +35,7 @@ void MoveGenerator::addMove(uint32 src, uint32 dst, uint8 oldPiece, uint8 flags)
             pos->board[dst] = oldPiece;	
         }
 
-        if (illegal)
-            return;
+        return illegal;
     }
     else
     {
@@ -48,9 +47,18 @@ void MoveGenerator::addMove(uint32 src, uint32 dst, uint8 oldPiece, uint8 flags)
         bool illegal = isThreatened(dst, !chance);
 
         pos->board[src] = temp;
+        
+        return illegal;
+    }
+}
 
-        if (illegal)
-            return;
+
+void MoveGenerator::addMove(uint32 src, uint32 dst, uint8 oldPiece, uint8 flags)
+{
+    // check if the move would put the king in check
+    if (isInvalidMove(src, dst, oldPiece, flags))
+    {
+        return;
     }
 
     moves[nMoves].src = (uint8) src;

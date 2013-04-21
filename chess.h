@@ -197,6 +197,7 @@ private:
     static Move *moves;
     static uint32 nMoves;
     static uint32 chance;
+	static uint32 kingPos;	// position of king of current color
 
     __forceinline static void addMove(uint32 src, uint32 dst, uint8 oldPiece, uint8 flags);
     __forceinline static void addPromotions(uint32 src, uint32 dst, uint8 oldPiece);
@@ -210,6 +211,9 @@ private:
     __forceinline static void generateBishopMoves(uint32 curPos);
     __forceinline static void generateQueenMoves(uint32 curPos);
     __forceinline static void generateMovesForSquare(uint32 index088, uint32 colorpiece);
+
+	__forceinline static bool checkSlidingThreat(uint32 curPos, uint32 offset, uint32 piece1, uint32 piece2);
+	static bool isThreatened(const uint32 curPos, uint32 color);
 
 public:
     // generates moves for the given board position

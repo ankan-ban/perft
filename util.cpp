@@ -197,15 +197,18 @@ void Utils::displayMove(Move move)
 	char dispString[10];
 
     uint8 r1, c1, r2, c2;
-    r1 = move.src >> 4;
-    c1 = move.src & 0x7;
+    r1 = RANK(move.src)+1;
+    c1 = FILE(move.src);
 
-    r2 = move.dst >> 4;
-    c2 = move.src & 0x7;
+    r2 = RANK(move.dst)+1;
+	c2 = FILE(move.dst);
 
-	sprintf(dispString, "%c%d%c%d\n", 
+	char sep = move.capturedPiece ? '*' : '-';
+
+	sprintf(dispString, "%c%d%c%c%d ", 
             c1+'a', 
             r1, 
+			sep,
             c2+'a', 
             r2);
 
@@ -360,5 +363,3 @@ void Utils::readFENString(char fen[], BoardPosition *pos)
 
 	}
     */
-
-
